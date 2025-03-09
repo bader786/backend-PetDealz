@@ -8,7 +8,13 @@ const path = require('path');
 
 const app = express();
 app.use(express.json());
-app.use(cors());
+app.use(cors({ 
+    origin: "https://petdealz.vercel.app", 
+    methods: "GET,POST,PUT,DELETE",
+    allowedHeaders: "Content-Type,Authorization"
+}));
+app.options('*', cors()); // Handle preflight requests globally
+
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGO_URI, {
