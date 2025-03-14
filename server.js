@@ -96,15 +96,12 @@ const listingSchema = new mongoose.Schema({
 });
 const Listing = mongoose.model("Listing", listingSchema);
 
-// ================================
-// 📌 File Upload Setup (Multer)
-// ================================
+
+// 📌 Multer Setup for File Uploads
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
-// ================================
-// 📌 Upload Images to GridFS
-// ================================
+// 📌 Upload Route to GridFS
 app.post("/upload", upload.single("file"), async (req, res) => {
   try {
     if (!req.file) {
@@ -115,13 +112,18 @@ app.post("/upload", upload.single("file"), async (req, res) => {
       contentType: req.file.mimetype,
     });
 
+    // ✅ Properly Pipe File Buffer to Upload Stream
     uploadStream.end(req.file.buffer);
 
-    uploadStream.on("finish", () => {
-      res.json({ message: "File uploaded successfully!", fileId: uploadStream.id.toString() });
+    uploadStream.on("finish", function () {
+      return res.json({ 
+        message: "File uploaded successfully!", 
+        fileId: uploadStream.id.toString()  // ✅ Correctly Retrieve File ID
+      });
     });
 
   } catch (error) {
+    console.error("Upload error:", error);
     res.status(500).json({ error: "Error uploading file" });
   }
 });
