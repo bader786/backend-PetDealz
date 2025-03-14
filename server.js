@@ -189,13 +189,18 @@ app.post("/post-listing", upload.array("media", 6), validateDescription, async (
 // 📌 Fetch All Listings
 // ================================
 app.get("/get-listings", async (req, res) => {
-  try {
-    const listings = await Listing.find();
-    res.json(listings);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
+    try {
+      const listings = await Listing.find();
+      const updatedListings = listings.map(listing => ({
+        ...listing._doc,
+        media: listing.media.map(fileId => `https://backend-petdealz.onrender.com/image/${fileId}`)
+      }));
+      res.json(updatedListings);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+  
 
 // ================================
 // 📌 Start Server
