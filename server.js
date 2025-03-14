@@ -164,27 +164,25 @@ const validateDescription = (req, res, next) => {
 // 📌 Post a Listing
 // ================================
 app.post("/post-listing", upload.array("media", 6), validateDescription, async (req, res) => {
-  try {
-    const { userId, title, description, category, location, price } = req.body;
-    const files = req.files;
-    if (!files || files.length === 0) {
-      return res.status(400).json({ error: "Please upload at least one image." });
+    try {
+      const { userId, title, description, category, location, price } = req.body;
+      const files = req.files;
+  
+      if (!files || files.length === 0) {
+        return res.status(400).json({ error: "Please upload at least one image." });
+      }
+  
+      const media = files.map(file => file.id?.toString()); // Ensure we store valid ObjectId
+      const newListing = new Listing({ userId, title, description, category, location, price, media });
+  
+      await newListing.save();
+      res.json({ message: "Listing posted successfully!", listing: newListing });
+  
+    } catch (error) {
+      res.status(500).json({ error: error.message });
     }
-    if (files.length > 6) {
-      return res.status(400).json({ error: "You can upload a maximum of 6 images." });
-    }
-
-    // Extract file IDs properly
-    const media = files.map(file => (file.id ? file.id.toString() : file.filename));
-
-    const newListing = new Listing({ userId, title, description, category, location, price, media });
-    await newListing.save();
-    res.json({ message: "Listing posted successfully!", listing: newListing });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
+  });
+  
 // ================================
 // 📌 Fetch All Listings
 // ================================
@@ -193,13 +191,14 @@ app.get("/get-listings", async (req, res) => {
       const listings = await Listing.find();
       const updatedListings = listings.map(listing => ({
         ...listing._doc,
-        media: listing.media.map(fileId => `https://backend-petdealz.onrender.com/image/${fileId}`)
+        media: listing.media.map(fileId => fileId ? `https://backend-petdealz.onrender.com/image/${fileId}` : 'default.jpg')
       }));
       res.json(updatedListings);
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
   });
+  
   
 
 // ================================
