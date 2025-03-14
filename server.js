@@ -6,7 +6,7 @@ const jwt = require('jsonwebtoken');
 const cors = require('cors');
 const path = require('path');
 const multer = require('multer');
-const { GridFsStorage } = require('multer-gridfs-storage');
+const GridFsStorage = require('multer-gridfs-storage').GridFsStorage;
 
 const Grid = require('gridfs-stream');
 
