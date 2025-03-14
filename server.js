@@ -4,9 +4,9 @@ const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const cors = require("cors");
-const path = require("path");
 const multer = require("multer");
 const { GridFSBucket } = require("mongodb");
+const { ObjectId } = require("mongoose").Types;
 
 const app = express();
 app.use(express.json());
@@ -28,9 +28,10 @@ mongoose.connect(process.env.MONGO_URI, {
 });
 const conn = mongoose.connection;
 
-let gfs, gridFSBucket;
+let gridFSBucket;
 conn.once("open", () => {
   gridFSBucket = new GridFSBucket(conn.db, { bucketName: "uploads" });
+  console.log("✅ GridFS Initialized");
 });
 
 // ================================
@@ -96,9 +97,9 @@ const listingSchema = new mongoose.Schema({
 const Listing = mongoose.model("Listing", listingSchema);
 
 // ================================
-// 📌 File Upload Setup (Multer + GridFS)
+// 📌 File Upload Setup (Multer)
 // ================================
-const storage = multer.memoryStorage(); // Store files in memory first
+const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
 // ================================
@@ -117,7 +118,7 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     uploadStream.end(req.file.buffer);
 
     uploadStream.on("finish", () => {
-      res.json({ message: "File uploaded successfully!", fileId: uploadStream.id });
+      res.json({ message: "File uploaded successfully!", fileId: uploadStream.id.toString() });
     });
 
   } catch (error) {
@@ -130,7 +131,12 @@ app.post("/upload", upload.single("file"), async (req, res) => {
 // ================================
 app.get("/image/:id", async (req, res) => {
   try {
-    const file = await conn.db.collection("uploads.files").findOne({ _id: new mongoose.Types.ObjectId(req.params.id) });
+    const fileId = req.params.id;
+    if (!ObjectId.isValid(fileId)) {
+      return res.status(400).json({ error: "Invalid file ID" });
+    }
+
+    const file = await conn.db.collection("uploads.files").findOne({ _id: new ObjectId(fileId) });
     if (!file) return res.status(404).json({ error: "File not found" });
 
     const readStream = gridFSBucket.openDownloadStream(file._id);
@@ -168,7 +174,9 @@ app.post("/post-listing", upload.array("media", 6), validateDescription, async (
       return res.status(400).json({ error: "You can upload a maximum of 6 images." });
     }
 
-    const media = files.map(file => file.id.toString());
+    // Extract file IDs properly
+    const media = files.map(file => (file.id ? file.id.toString() : file.filename));
+
     const newListing = new Listing({ userId, title, description, category, location, price, media });
     await newListing.save();
     res.json({ message: "Listing posted successfully!", listing: newListing });
