@@ -5,21 +5,30 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
 const path = require('path');
-const multer = require('multer'); // Added for file uploads
+const multer = require('multer');
+const { GridFsStorage } = require('multer-gridfs-storage');
+const Grid = require('gridfs-stream');
 
 const app = express();
 app.use(express.json());
-app.use(cors({ 
-    origin: "https://petdealz.vercel.app", 
+app.use(cors({
+    origin: "https://petdealz.vercel.app",
     methods: "GET,POST,PUT,DELETE",
     allowedHeaders: "Content-Type,Authorization"
 }));
-app.options('*', cors()); // Handle preflight requests globally
+app.options('*', cors());
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGO_URI, {
     useNewUrlParser: true,
     useUnifiedTopology: true
+});
+
+const conn = mongoose.connection;
+let gfs;
+conn.once('open', () => {
+    gfs = Grid(conn.db, mongoose.mongo);
+    gfs.collection('uploads');
 });
 
 // User Schema & Model
@@ -28,7 +37,6 @@ const UserSchema = new mongoose.Schema({
     email: { type: String, unique: true },
     password: String
 });
-
 const User = mongoose.model('User', UserSchema);
 
 // Signup Endpoint
@@ -62,7 +70,6 @@ app.post('/login', async (req, res) => {
 // Serve static files from the 'public' folder
 app.use(express.static(path.join(__dirname, 'public')));
 
-
 // ============================
 // 📌 New Sell Listing Feature
 // ============================
@@ -75,23 +82,19 @@ const listingSchema = new mongoose.Schema({
     category: String,
     location: String,
     price: Number,
-    media: [{
-        filename: String,
-        contentType: String,
-        path: String
-    }],
+    media: [String], // Store image IDs from GridFS
     dateTime: { type: Date, default: Date.now }
 });
-
 const Listing = mongoose.model("Listing", listingSchema);
 
-// Multer Storage Setup
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, "uploads/");
-    },
-    filename: (req, file, cb) => {
-        cb(null, Date.now() + "-" + file.originalname);
+// Multer GridFS Storage
+const storage = new GridFsStorage({
+    url: process.env.MONGO_URI,
+    file: (req, file) => {
+        return {
+            filename: Date.now() + '-' + file.originalname,
+            bucketName: 'uploads'
+        };
     }
 });
 const upload = multer({ storage });
@@ -111,23 +114,15 @@ app.post("/post-listing", upload.array("media", 6), validateDescription, async (
     try {
         const { userId, title, description, category, location, price } = req.body;
         const files = req.files;
-
         if (!files || files.length === 0) {
-            return res.status(400).json({ error: "Please upload at least one image or video." });
+            return res.status(400).json({ error: "Please upload at least one image." });
         }
         if (files.length > 6) {
-            return res.status(400).json({ error: "You can upload a maximum of 6 images/videos." });
+            return res.status(400).json({ error: "You can upload a maximum of 6 images." });
         }
-
-        const media = files.map(file => ({
-            filename: file.filename,
-            contentType: file.mimetype,
-            path: file.path
-        }));
-
+        const media = files.map(file => file.id.toString());
         const newListing = new Listing({ userId, title, description, category, location, price, media });
         await newListing.save();
-
         res.json({ message: "Listing posted successfully!", listing: newListing });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -141,6 +136,18 @@ app.get("/get-listings", async (req, res) => {
         res.json(listings);
     } catch (error) {
         res.status(500).json({ error: error.message });
+    }
+});
+
+// 📌 API Route to Retrieve Images
+app.get("/image/:id", async (req, res) => {
+    try {
+        const file = await gfs.files.findOne({ _id: new mongoose.Types.ObjectId(req.params.id) });
+        if (!file) return res.status(404).json({ error: 'File not found' });
+        const readStream = gfs.createReadStream(file._id);
+        readStream.pipe(res);
+    } catch (error) {
+        res.status(500).json({ error: 'Error retrieving image' });
     }
 });
 
