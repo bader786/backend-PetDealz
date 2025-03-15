@@ -36,7 +36,7 @@ const storage = new CloudinaryStorage({
   params: {
     folder: "petdealz",
     format: async (req, file) => "jpg",
-    public_id: (req, file) => `${req.user.userId}_${Date.now()}`,
+    public_id: (req, file) => `${Date.now()}_${file.originalname.replace(/\s+/g, "_")}`,
   },
 });
 
@@ -72,6 +72,8 @@ const authenticateToken = (req, res, next) => {
 app.post("/signup", async (req, res) => {
   try {
     const { name, email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ error: "Email and password are required." });
+
     const existingUser = await User.findOne({ email });
     if (existingUser) return res.status(400).json({ error: "Email already exists." });
 
@@ -108,7 +110,7 @@ const listingSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   title: { type: String, required: true },
   description: String,
-  category: String,
+  category: { type: String, required: true },
   location: String,
   price: { type: Number, required: true },
   media: [String],
@@ -122,6 +124,10 @@ const Listing = mongoose.model("Listing", listingSchema);
 app.post("/post-listing", authenticateToken, upload.array("media", 6), async (req, res) => {
   try {
     const { title, description, category, location, price } = req.body;
+    if (!title || !category || !price) {
+      return res.status(400).json({ error: "Title, category, and price are required." });
+    }
+
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ error: "Please upload at least one image." });
     }
