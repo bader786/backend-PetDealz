@@ -117,22 +117,28 @@ app.post("/upload", upload.single("file"), async (req, res) => {
       uploadStream.on("finish", async () => {
         const fileId = uploadStream.id.toString(); // Convert ObjectId to string
   
-        // Save the fileId in MongoDB inside the listing
+        // DEBUG: Print File ID
+        console.log("Uploaded File ID:", fileId);
+  
+        // Save fileId in MongoDB listing
         const newListing = new Listing({
           title: req.body.title,
           description: req.body.description,
           location: req.body.location,
           price: req.body.price,
-          media: [fileId] // Store fileId in media field
+          media: [fileId] // Store fileId in media array
         });
   
-        await newListing.save(); // Save listing to MongoDB
+        const savedListing = await newListing.save(); // Save to MongoDB
+  
+        // DEBUG: Print the Saved Listing
+        console.log("Saved Listing:", savedListing);
   
         res.json({ message: "File uploaded successfully!", fileId });
       });
   
     } catch (error) {
-      console.error(error);
+      console.error("Upload Error:", error);
       res.status(500).json({ error: "Error uploading file" });
     }
   });
@@ -142,23 +148,22 @@ app.post("/upload", upload.single("file"), async (req, res) => {
 // 📌 Retrieve Images from GridFS
 // ================================
 app.get("/image/:id", async (req, res) => {
-  try {
-    const fileId = req.params.id;
-    if (!ObjectId.isValid(fileId)) {
-      return res.status(400).json({ error: "Invalid file ID" });
+    try {
+      const fileId = new mongoose.Types.ObjectId(req.params.id);
+      const downloadStream = gridFSBucket.openDownloadStream(fileId);
+  
+      downloadStream.on("error", (error) => {
+        res.status(404).json({ error: "File not found" });
+      });
+  
+      res.set("Content-Type", "image/jpeg"); // Change based on file type
+      downloadStream.pipe(res);
+  
+    } catch (error) {
+      res.status(500).json({ error: "Error fetching image" });
     }
-
-    const file = await conn.db.collection("uploads.files").findOne({ _id: new ObjectId(fileId) });
-    if (!file) return res.status(404).json({ error: "File not found" });
-
-    const readStream = gridFSBucket.openDownloadStream(file._id);
-    res.set("Content-Type", file.contentType);
-    readStream.pipe(res);
-
-  } catch (error) {
-    res.status(500).json({ error: "Error retrieving image" });
-  }
-});
+  });
+  
 
 // ================================
 // 📌 Middleware: Validate Description (No Phone Numbers Allowed)
