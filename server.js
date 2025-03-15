@@ -177,23 +177,29 @@ const validateDescription = (req, res, next) => {
 // ================================
 app.post("/post-listing", upload.array("media", 6), validateDescription, async (req, res) => {
     try {
-      const { userId, title, description, category, location, price } = req.body;
-      const files = req.files;
-  
-      if (!files || files.length === 0) {
-        return res.status(400).json({ error: "Please upload at least one image." });
-      }
-  
-      const media = files.map(file => file.id?.toString()); // Ensure we store valid ObjectId
-      const newListing = new Listing({ userId, title, description, category, location, price, media });
-  
-      await newListing.save();
-      res.json({ message: "Listing posted successfully!", listing: newListing });
-  
+        const { userId, title, description, category, location, price } = req.body;
+        const files = req.files;
+
+        // Validate required fields
+        if (!userId || !title || !category || !price) {
+            return res.status(400).json({ error: "Missing required fields." });
+        }
+
+        if (!files || files.length === 0) {
+            return res.status(400).json({ error: "Please upload at least one image." });
+        }
+
+        const media = files.map(file => file._id?.toString()); // Use _id to get ObjectId
+        const newListing = new Listing({ userId, title, description, category, location, price, media });
+
+        await newListing.save();
+        res.json({ message: "Listing posted successfully!", listing: newListing });
+
     } catch (error) {
-      res.status(500).json({ error: error.message });
+        res.status(500).json({ error: error.message });
     }
-  });
+});
+
   
 // ================================
 // 📌 Fetch All Listings
