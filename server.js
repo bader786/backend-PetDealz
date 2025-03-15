@@ -1,4 +1,3 @@
-require("dotenv").config();
 const express = require("express");
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
@@ -12,10 +11,12 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
+const JWT_SECRET = "eyJhbGciOiJIUzI1NiJ9.eyJSb2xlIjoiQWRtaW4iLCJJc3N1ZXIiOiJJc3N1ZXIiLCJVc2VybmFtZSI6IkphdmFJblVzZSIsImV4cCI6MTc0MjA3NjI0NCwiaWF0IjoxNzQyMDc2MjQ0fQ.4xE1xiZ1gtXfCQbd7Xc2coB3chR0hXzefWiHO7AzSPE"; 
+
 // ================================
 // 📌 MongoDB Connection
 // ================================
-mongoose.connect(process.env.MONGO_URI, {
+mongoose.connect("your_mongo_uri", {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 })
@@ -26,9 +27,9 @@ mongoose.connect(process.env.MONGO_URI, {
 // 📌 Cloudinary Configuration
 // ================================
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
+  cloud_name: "your_cloudinary_cloud_name",
+  api_key: "your_cloudinary_api_key",
+  api_secret: "your_cloudinary_api_secret",
 });
 
 const storage = new CloudinaryStorage({
@@ -57,26 +58,25 @@ const User = mongoose.model("User", UserSchema);
 // ================================
 const authenticateToken = (req, res, next) => {
     const authHeader = req.header("Authorization");
-    console.log("Auth Header Received:", authHeader); // Debugging
+    console.log("Auth Header Received:", authHeader);
 
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
         return res.status(401).json({ error: "Access denied. Please log in." });
     }
 
     const token = authHeader.split(" ")[1];
-    console.log("Extracted Token:", token); // Debugging
+    console.log("Extracted Token:", token);
 
-    jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+    jwt.verify(token, JWT_SECRET, (err, user) => {
         if (err) {
-            console.log("Token Verification Failed:", err.message); // Debugging
+            console.log("Token Verification Failed:", err.message);
             return res.status(403).json({ error: "Invalid or expired token." });
         }
-        console.log("User Authenticated:", user); // Debugging
-        req.user = user; // Storing user info in request
+        console.log("User Authenticated:", user);
+        req.user = user;
         next();
     });
 };
-
 
 // ================================
 // 📌 Signup & Login
@@ -106,7 +106,7 @@ app.post("/login", async (req, res) => {
     const isValidPassword = await bcrypt.compare(password, user.password);
     if (!isValidPassword) return res.status(400).json({ error: "Invalid credentials" });
 
-    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: "2h" });
+    const token = jwt.sign({ userId: user._id }, JWT_SECRET, { expiresIn: "2h" });
     res.json({ message: "Login successful", token });
   } catch (error) {
     res.status(500).json({ error: "Error logging in: " + error.message });
