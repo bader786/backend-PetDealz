@@ -56,21 +56,27 @@ const User = mongoose.model("User", UserSchema);
 // 📌 Authentication Middleware
 // ================================
 const authenticateToken = (req, res, next) => {
-  const authHeader = req.header("Authorization");
-  console.log("Auth Header:", authHeader);
-  const token = authHeader?.split(" ")[1];
-  if (!token) return res.status(401).json({ error: "Access denied. Please log in." });
+    const authHeader = req.header("Authorization");
+    console.log("Auth Header Received:", authHeader); // Debugging
 
-  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-    if (err) {
-        console.log("Token Verification Failed:", err.message); // Debugging
-        return res.status(403).json({ error: "Invalid or expired token." });
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "Access denied. Please log in." });
     }
-    console.log("User Authenticated:", user); // Debugging
-    req.user = user;
-    next();
-  });
+
+    const token = authHeader.split(" ")[1];
+    console.log("Extracted Token:", token); // Debugging
+
+    jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+        if (err) {
+            console.log("Token Verification Failed:", err.message); // Debugging
+            return res.status(403).json({ error: "Invalid or expired token." });
+        }
+        console.log("User Authenticated:", user); // Debugging
+        req.user = user; // Storing user info in request
+        next();
+    });
 };
+
 
 // ================================
 // 📌 Signup & Login
