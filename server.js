@@ -175,21 +175,14 @@ const validateDescription = (req, res, next) => {
 // ================================
 // 📌 Post a Listing
 // ================================
-app.post("/post-listing", upload.array("media", 6), validateDescription, async (req, res) => {
+app.post("/post-listing", async (req, res) => {
     try {
-        const { userId, title, description, category, location, price } = req.body;
-        const files = req.files;
+        const { userId, title, description, category, location, price, media } = req.body;
 
-        // Validate required fields
-        if (!userId || !title || !category || !price) {
-            return res.status(400).json({ error: "Missing required fields." });
+        if (!userId || !title || !category || !price || !media || media.length === 0) {
+            return res.status(400).json({ error: "Missing required fields or images." });
         }
 
-        if (!files || files.length === 0) {
-            return res.status(400).json({ error: "Please upload at least one image." });
-        }
-
-        const media = files.map(file => file._id?.toString()); // Use _id to get ObjectId
         const newListing = new Listing({ userId, title, description, category, location, price, media });
 
         await newListing.save();
