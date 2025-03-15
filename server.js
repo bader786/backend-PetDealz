@@ -103,30 +103,40 @@ const upload = multer({ storage });
 
 // 📌 Upload Route to GridFS
 app.post("/upload", upload.single("file"), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: "No file uploaded." });
-    }
-
-    const uploadStream = gridFSBucket.openUploadStream(req.file.originalname, {
-      contentType: req.file.mimetype,
-    });
-
-    // ✅ Properly Pipe File Buffer to Upload Stream
-    uploadStream.end(req.file.buffer);
-
-    uploadStream.on("finish", function () {
-      return res.json({ 
-        message: "File uploaded successfully!", 
-        fileId: uploadStream.id.toString()  // ✅ Correctly Retrieve File ID
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No file uploaded." });
+      }
+  
+      const uploadStream = gridFSBucket.openUploadStream(req.file.originalname, {
+        contentType: req.file.mimetype,
       });
-    });
-
-  } catch (error) {
-    console.error("Upload error:", error);
-    res.status(500).json({ error: "Error uploading file" });
-  }
-});
+  
+      uploadStream.end(req.file.buffer);
+  
+      uploadStream.on("finish", async () => {
+        const fileId = uploadStream.id.toString(); // Convert ObjectId to string
+  
+        // Save the fileId in MongoDB inside the listing
+        const newListing = new Listing({
+          title: req.body.title,
+          description: req.body.description,
+          location: req.body.location,
+          price: req.body.price,
+          media: [fileId] // Store fileId in media field
+        });
+  
+        await newListing.save(); // Save listing to MongoDB
+  
+        res.json({ message: "File uploaded successfully!", fileId });
+      });
+  
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Error uploading file" });
+    }
+  });
+  
 
 // ================================
 // 📌 Retrieve Images from GridFS
