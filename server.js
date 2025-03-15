@@ -147,23 +147,18 @@ app.post("/upload", upload.single("file"), async (req, res) => {
 // ================================
 // 📌 Retrieve Images from GridFS
 // ================================
-app.get("/image/:id", async (req, res) => {
+app.get("/image/:filename", async (req, res) => {
+    const filename = req.params.filename;
+    const bucket = new GridFSBucket(mongoose.connection.db, { bucketName: "uploads" });
+
     try {
-      const fileId = new mongoose.Types.ObjectId(req.params.id);
-      const downloadStream = gridFSBucket.openDownloadStream(fileId);
-  
-      downloadStream.on("error", (error) => {
-        res.status(404).json({ error: "File not found" });
-      });
-  
-      res.set("Content-Type", "image/jpeg"); // Change based on file type
-      downloadStream.pipe(res);
-  
-    } catch (error) {
-      res.status(500).json({ error: "Error fetching image" });
+        const fileStream = bucket.openDownloadStreamByName(filename);
+        fileStream.pipe(res);
+    } catch (err) {
+        res.status(404).send("Image not found");
     }
-  });
-  
+});
+
 
 // ================================
 // 📌 Middleware: Validate Description (No Phone Numbers Allowed)
