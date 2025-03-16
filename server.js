@@ -2,15 +2,24 @@ require("dotenv").config();
 const express = require("express");
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
 const cors = require("cors");
 const multer = require("multer");
 const cloudinary = require("cloudinary").v2;
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
+const session = require("express-session");
 
 const app = express();
 app.use(express.json());
-app.use(cors());
+const corsOptions = {
+    origin: (origin, callback) => {
+      callback(null, origin || "*");  // Allow all origins dynamically
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization"]
+  };
+  app.use(cors(corsOptions));
+  
 
 // ================================
 // 📌 MongoDB Connection
@@ -35,12 +44,22 @@ const storage = new CloudinaryStorage({
   cloudinary,
   params: {
     folder: "petdealz",
-    format: async (req, file) => "jpg",
-    public_id: (req, file) => `${req.user.userId}_${Date.now()}`,
+    format: async () => "jpg",
+    public_id: (req, file) => `${req.session.userId}_${Date.now()}`,
   },
 });
 
 const upload = multer({ storage });
+
+// ================================
+// 📌 Session Configuration
+// ================================
+app.use(session({
+  secret: "your_secret_key_here",  // Change this to a strong secret
+  resave: false,
+  saveUninitialized: true,
+  cookie: { secure: false }  // Set to true if using HTTPS
+}));
 
 // ================================
 // 📌 User Schema & Model
@@ -55,33 +74,13 @@ const User = mongoose.model("User", UserSchema);
 // ================================
 // 📌 Authentication Middleware
 // ================================
-const JWT_SECRET = "eyJhbGciOiJIUzI1NiJ9.eyJSb2xlIjoiQWRtaW4iLCJJc3N1ZXIiOiJJc3N1ZXIiLCJVc2VybmFtZSI6IkphdmFJblVzZSIsImV4cCI6MTc0MjA3NjI0NCwiaWF0IjoxNzQyMDc2MjQ0fQ.4xE1xiZ1gtXfCQbd7Xc2coB3chR0hXzefWiHO7AzSPE"; // 🔴 Replace with your secret key
-
-// ================================
-// 📌 Authentication Middleware
-// ================================
-const authenticateToken = (req, res, next) => {
-    const authHeader = req.header("Authorization");
-    console.log("Auth Header Received:", authHeader); // Debugging
-
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-        return res.status(401).json({ error: "Access denied. Please log in." });
-    }
-
-    const token = authHeader.split(" ")[1];
-    console.log("Extracted Token:", token); // Debugging
-
-    jwt.verify(token, JWT_SECRET, (err, user) => {
-        if (err) {
-            console.log("Token Verification Failed:", err.message); // Debugging
-            return res.status(403).json({ error: "Invalid or expired token." });
-        }
-        console.log("User Authenticated:", user); // Debugging
-        req.user = user; // Storing user info in request
-        next();
-    });
+const authenticateSession = (req, res, next) => {
+  if (!req.session.userId) {
+    return res.status(401).json({ error: "Access denied. Please log in." });
+  }
+  req.user = { userId: req.session.userId };
+  next();
 };
-
 
 // ================================
 // 📌 Signup & Login
@@ -102,24 +101,34 @@ app.post("/signup", async (req, res) => {
   }
 });
 
-// ================================
-// 📌 Signup & Login
-// ================================
 app.post("/login", async (req, res) => {
-    try {
-      const { email, password } = req.body;
-      const user = await User.findOne({ email });
-      if (!user) return res.status(400).json({ error: "User not found" });
-  
-      const isValidPassword = await bcrypt.compare(password, user.password);
-      if (!isValidPassword) return res.status(400).json({ error: "Invalid credentials" });
-  
-      const token = jwt.sign({ userId: user._id }, JWT_SECRET, { expiresIn: "2h" });
-      res.json({ message: "Login successful", token });
-    } catch (error) {
-      res.status(500).json({ error: "Error logging in: " + error.message });
-    }
+  try {
+    const { email, password } = req.body;
+    const user = await User.findOne({ email });
+    if (!user) return res.status(400).json({ error: "User not found" });
+
+    const isValidPassword = await bcrypt.compare(password, user.password);
+    if (!isValidPassword) return res.status(400).json({ error: "Invalid credentials" });
+
+    // ✅ Store user session instead of JWT
+    req.session.userId = user._id;
+
+    res.json({ message: "Login successful" });
+  } catch (error) {
+    res.status(500).json({ error: "Error logging in: " + error.message });
+  }
+});
+
+// ================================
+// 📌 Logout Route
+// ================================
+app.post("/logout", (req, res) => {
+  req.session.destroy(err => {
+    if (err) return res.status(500).json({ error: "Error logging out" });
+    res.json({ message: "Logged out successfully" });
   });
+});
+
 // ================================
 // 📌 Pet Listing Schema & Model
 // ================================
@@ -138,7 +147,7 @@ const Listing = mongoose.model("Listing", listingSchema);
 // ================================
 // 📌 Post a Listing with Image Upload
 // ================================
-app.post("/post-listing", authenticateToken, upload.array("media", 6), async (req, res) => {
+app.post("/post-listing", authenticateSession, upload.array("media", 6), async (req, res) => {
   try {
     const { title, description, category, location, price } = req.body;
     if (!req.files || req.files.length === 0) {
@@ -158,7 +167,7 @@ app.post("/post-listing", authenticateToken, upload.array("media", 6), async (re
 // ================================
 // 📌 Fetch Listings for a User
 // ================================
-app.get("/my-listings", authenticateToken, async (req, res) => {
+app.get("/my-listings", authenticateSession, async (req, res) => {
   try {
     const listings = await Listing.find({ userId: req.user.userId });
     res.json(listings);
