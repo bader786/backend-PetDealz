@@ -55,7 +55,7 @@ const upload = multer({ storage });
 // 📌 Session Configuration
 // ================================
 app.use(session({
-  secret: "your_secret_key_here",  // Change this to a strong secret
+    secret: process.env.SESSION_SECRET, 
   resave: false,
   saveUninitialized: true,
   cookie: { secure: false }  // Set to true if using HTTPS
